@@ -1,4 +1,4 @@
-![Build status](https://github.com/github/docs/actions/workflows/rust.yml/badge.svg)
+![Build status](https://github.com/bpeperkamp/rust_tmdb/actions/workflows/rust.yml/badge.svg)
 
 ## My first experiment in Rust
 
