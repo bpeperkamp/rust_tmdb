@@ -1,3 +1,5 @@
+![Build status](https://github.com/github/docs/actions/workflows/rust.yml/badge.svg)
+
 ## My first experiment in Rust
 
 This command will find a search term in TMDB for you. You can use it to look for series and movies.
