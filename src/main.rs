@@ -81,6 +81,8 @@ async fn main() -> Result<(), Error> {
                     let item_released = "released:".to_string().grey();
                     let item_language = "language:".to_string().grey();
                     let item_id = "tmdb_id:".to_string().grey();
+
+                    // This can probably improve quite a lot.
                     println!("{} {} - {} {} - {} {} - {} {}", item_title, &item.original_name.unwrap().blue(), item_released, print_date, item_language, original_language, item_id, &item.id.to_string().blue())
                 } else {
                     let print_date = if item.release_date.as_ref().unwrap().is_empty() { "unknown".to_string().blue() } else { item.release_date.unwrap().blue() };
@@ -90,6 +92,8 @@ async fn main() -> Result<(), Error> {
                     let item_released = "released:".to_string().grey();
                     let item_language = "language:".to_string().grey();
                     let item_id = "tmdb_id:".to_string().grey();
+
+                    // This can probably improve quite a lot.
                     println!("{} {} - {} {} - {} {} - {} {}", item_title, &item.original_title.unwrap().blue(), item_released, print_date, item_language, original_language, item_id, &item.id.to_string().blue())
                 }
             }
