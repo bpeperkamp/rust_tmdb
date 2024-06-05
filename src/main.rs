@@ -1,84 +1,67 @@
 use clap::Parser;
-#[allow(unused_imports)]
-use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
-#[allow(unused_imports)]
-use crossterm::style::{Print, Stylize};
-#[allow(unused_imports)]
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
+use dialoguer::{theme::ColorfulTheme, Input, Select};
 use dotenv::dotenv;
 use reqwest::Error;
-use serde::Deserialize;
-#[allow(unused_imports)]
-use std::io::{stdin, stdout, Write};
+use serde::{Deserialize, Serialize};
 use urlencoding::encode;
-#[allow(unused_imports)]
-use dialoguer::{Select, Input, theme::ColorfulTheme};
 
 // #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct Item {
     id: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
     original_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     original_title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     first_air_date: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     release_date: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     original_language: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     media_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Data {
+    media_type: String,
+    tmdb_id: u64
 }
 
 #[derive(Parser, Debug)]
 #[command(name = "Find movies and series on TMDB")]
 #[command(version = "1.0")]
-#[command(about = "It searches for your searchterm on TMDB and returns results.")]
+#[command(about = "It searches for your searchterm on TMDB and returns results. Once selected, it sends the data to your API server.")]
 struct Args {
-    // Title of the serie or movie to lookup
-    // #[arg(short, long)]
-    // title: String,
-
-    // Media type, serie or movie
-    // #[arg(short, long, default_value = "tv")]
-    // media_type: String,
-
-    // Page number of the results (20 results per page)
-    // #[arg(short, long, default_value_t = 1)]
-    // count: u8,
+    /// Title of the serie or movie to lookup
+    #[arg(short, long)]
+    title: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Items {
     results: Vec<Item>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+
+    // Get the env file
     dotenv().ok();
+
+    let args = Args::parse();
 
     let bearer_token = std::env::var("TMDB_TOKEN").expect("TMDB_TOKEN must be set.");
 
-    // let args = Args::parse();
-
     let base_url = "https://api.themoviedb.org/3/search/multi";
 
-    // let search_type = if args.media_type == "movie" {
-    //     "movie"
-    // } else {
-    //     "tv"
-    // };
-
-    let title: String = Input::new()
-        .with_prompt("Search for")
-        .interact_text()
-        .unwrap();
+    // Get the title from terminal arguments or ask for them
+    let title: String = if args.title.is_some() {
+        args.title.unwrap()
+    } else {
+        Input::new()
+            .with_prompt("Search for")
+            .interact_text()
+            .unwrap()
+    };
 
     let params = "?page=1&include_adult=false&language=en-US&page=1&query=";
     let search_term = encode(&title);
-
     let complete_url = format!("{base_url}{params}{search_term}");
 
     let response = reqwest::Client::new()
@@ -92,29 +75,87 @@ async fn main() -> Result<(), Error> {
         Ok(data) => {
             let items: Vec<Item> = data.json::<Items>().await?.results;
 
-            let mut v : Vec<String> = Vec::new();
+            println!("{:?}", &items);
+
+            let mut v: Vec<String> = Vec::new();
 
             for item in items {
-                let found_title = if item.original_name.as_ref().is_some() { item.original_name } else { item.original_title };
-                let found_release_date = if item.first_air_date.as_ref().is_some() { item.first_air_date } else { item.release_date };
+                if item.media_type.as_ref().unwrap() != "person" {
+                    
+                    let found_title = if item.original_name.as_ref().is_some() {
+                        item.original_name
+                    } else {
+                        item.original_title
+                    };
 
-                let strr = format!("{} - {} - {} - {} - {}", item.media_type.unwrap(), found_title.unwrap(), found_release_date.unwrap(), item.original_language.unwrap(), item.id.to_string());
-
-                v.push(strr);
+                    // Convert this to a match, this code reeks of...
+                    let found_release_date = if item.first_air_date.as_ref().is_some() && item.first_air_date.as_ref().unwrap().is_empty() {
+                        String::from("unknown")
+                    } else if item.release_date.as_ref().is_some() && item.release_date.as_ref().unwrap().is_empty() {
+                        String::from("unknown")
+                    } else if item.first_air_date.as_ref().is_some() {
+                        item.first_air_date.unwrap()
+                    } else if item.release_date.as_ref().is_some() {
+                        item.release_date.unwrap()
+                    } else {
+                        String::from("unknown")
+                    };
+    
+                    let separator = "»";
+    
+                    let strr = format!(
+                        "{} {} {} {} {} {} {} {} {}",
+                        item.media_type.unwrap().to_uppercase(),
+                        separator,
+                        found_title.unwrap(),
+                        separator,
+                        found_release_date,
+                        separator,
+                        item.original_language.unwrap_or(String::from("unknown")),
+                        separator,
+                        item.id.to_string()
+                    );
+    
+                    v.push(strr.to_string());
+                }
             }
 
             let index = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Pick an Activity:")
+                .with_prompt("Select your choice:")
                 .default(0)
                 .items(&v)
                 .interact();
 
             let selected_index = &index.unwrap();
             let selected_value = &v[*selected_index];
-            let selected_values: Vec<&str> = selected_value.split('-').collect();
-            let tmdb_id = selected_values[6].replace(" ", "");
+            let selected_values: Vec<&str> = selected_value.split("»").collect();
 
-            println!("You selected {:?}", tmdb_id);
+            let tmdb_id = selected_values[4].trim_start();
+
+            let api_url = std::env::var("API_URL").expect("API_URL must be set.");
+            let api_bearer_token = std::env::var("API_TOKEN").expect("API_TOKEN must be set.");
+
+            let data = Data {
+                media_type: String::from(selected_values[0]).to_lowercase(),
+                tmdb_id: tmdb_id.to_string().parse::<u64>().unwrap()
+            };
+
+            let api_response = reqwest::Client::new()
+                .post(api_url)
+                .json(&data)
+                .header("Accept", "application/json")
+                .header("Authorization", format!("Bearer ") + &api_bearer_token)
+                .send()
+                .await;
+
+            match api_response {
+                Ok(_data) => {
+                    println!("Data stored, check your list online!");
+                }
+                Err(_error) => {
+                    println!("Error sending request, server could not be reached?");
+                }
+            }
         }
         Err(_error) => {
             println!("Error sending request, server could not be reached?");
